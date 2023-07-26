@@ -1,31 +1,35 @@
-import express, { Application } from "express";
+import { typeDefs } from "./schemas/schema";
+import { ApolloServer } from "apollo-server-express";
+import { resolvers } from "./resolvers/resolvers";
+
+import express from "express";
+import http from "http";
 import cors from "cors";
-import { createHandler } from "graphql-http/lib/use/express";
-import { schema } from "./previous-step";
+import bodyParser from "body-parser";
 
-import dotenv from "dotenv";
-dotenv.config();
+const port = 4000;
+const eventId = process.argv[2];
 
-export const app: Application = express();
+async function startServer() {
+  const app = express();
+  const httpServer = http.createServer(app);
 
-app.all("/graphql", createHandler({ schema }));
-
-app.use(cors());
-
-app.use(express.static("public"));
-
-app.use(express.json());
-
-app.use("/api/tickets", ticketsRouter);
-
-app.use((req, res) => {
-  res.status(404).json({ message: "Not found" });
-});
-
-app.use((err, req, res, next) => {
-  const { status } = err;
-
-  res.status(status || 500).json({
-    msg: err.message,
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    context: { eventId },
   });
-});
+
+  await server.start();
+
+  app.use("/", cors(), bodyParser.json());
+
+  server.applyMiddleware({ app });
+
+  await new Promise<void>((resolve) =>
+    httpServer.listen(port, () => resolve())
+  );
+  console.log(`Server ready at http://localhost:${port}${server.graphqlPath}`);
+}
+
+startServer().catch((err) => console.error(err));
